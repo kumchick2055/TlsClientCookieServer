@@ -31,309 +31,343 @@ namespace TlsClientCookieServer
         public string sessionId { get; set; }
     }
 
-    public class CookiesListByUrlJson
+    public class CookiesHeaderJson
     {
-        public string sessionId { get; set; }
+        public string cookies { get; set; }
         public string url { get; set; }
-    }
-
-    public class ClearCookieListBySession
-    {
         public string sessionId { get; set; }
-    }
 
-    public class AllCookiesListJson
-    {
-        public IList<CookieJson> cookies { get; set; }
-    }
-
-
-
-    public class Program
-    {
-        private static Dictionary<Guid, CookieContainer> cookieJar = new Dictionary<Guid, CookieContainer>();
-
-        public static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
+        public class CookieHeaderJson
         {
-            DateTime dateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
-            dateTime = dateTime.AddSeconds(unixTimeStamp).ToLocalTime();
-            return dateTime;
-        }
+            public string cookie { get; set; }
 
-        public static IEnumerable<Cookie> GetAllCookies(CookieContainer c)
-        {
-            Hashtable k = (Hashtable)c.GetType().GetField("m_domainTable", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(c);
-            foreach (DictionaryEntry element in k)
+            public class CookiesListByUrlJson
             {
-                SortedList l = (SortedList)element.Value.GetType().GetField("m_list", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(element.Value);
-                foreach (var e in l)
-                {
-                    var cl = (CookieCollection)((DictionaryEntry)e).Value;
-                    foreach (Cookie fc in cl)
-                    {
-                        yield return fc;
-                    }
-                }
+                public string sessionId { get; set; }
+                public string url { get; set; }
             }
-        }
 
-        static async Task SendResponseJson(HttpListenerResponse resp, int code, string data)
-        {
-            byte[] buffer = Encoding.UTF8.GetBytes(data);
-
-            resp.ContentType = "application/json";
-            resp.ContentEncoding = Encoding.UTF8;
-            resp.ContentLength64 = buffer.Length;
-            resp.StatusCode = code;
-
-            await resp.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-        }
-
-
-        static void Main(string[] args)
-        {
-            var httpListener = new HttpListener();
-            httpListener.Prefixes.Add("http://localhost:2505/");
-            httpListener.Start();
-
-            Console.WriteLine("Cookie Server start on http://localhost:2505/");
-
-
-            Task listenTask = HandleIncomingConnections(httpListener);
-            listenTask.GetAwaiter().GetResult();
-
-            httpListener.Close();
-        }
-
-
-        static async Task HandleIncomingConnections(HttpListener listener)
-        {
-            while (true)
+            public class ClearCookieListBySession
             {
-                // Ожидаем входящее соединение
-                HttpListenerContext ctx = await listener.GetContextAsync();
+                public string sessionId { get; set; }
+            }
 
-                // Получаем запрос и ответ
-                HttpListenerRequest req = ctx.Request;
-                HttpListenerResponse resp = ctx.Response;
+            public class AllCookiesListJson
+            {
+                public IList<CookieJson> cookies { get; set; }
+            }
 
-                // Очистить куки
-                if (req.HttpMethod == "GET" && req.Url.AbsolutePath == "/api/v1/clear_all_cookies")
+
+
+            public class Program
+            {
+                private static Dictionary<Guid, CookieContainer> cookieJar = new Dictionary<Guid, CookieContainer>();
+
+                public static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
                 {
-                    Console.WriteLine("Очистка кукисов...");
-                    cookieJar.Clear();
-
-                    // Формируем JSON ответ
-                    string jsonResponse = "{\"code\": 200, \"detail\": \"success\"}";
-                    await SendResponseJson(resp, 200, jsonResponse);
+                    DateTime dateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+                    dateTime = dateTime.AddSeconds(unixTimeStamp).ToLocalTime();
+                    return dateTime;
                 }
-                // Очистить куки в определенной сессии
-                else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/api/v1/clear_cookies_by_sessionid")
+
+                public static IEnumerable<Cookie> GetAllCookies(CookieContainer c)
                 {
-                    try
+                    Hashtable k = (Hashtable)c.GetType().GetField("m_domainTable", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(c);
+                    foreach (DictionaryEntry element in k)
                     {
-                        using (StreamReader reader = new StreamReader(req.InputStream, req.ContentEncoding))
+                        SortedList l = (SortedList)element.Value.GetType().GetField("m_list", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(element.Value);
+                        foreach (var e in l)
                         {
-                            string requestBody = await reader.ReadToEndAsync();
-
-                            CookiesListByUrlJson cookiesListJson = JsonConvert.DeserializeObject<CookiesListByUrlJson>(requestBody);
-                            Console.WriteLine(cookiesListJson.sessionId);
-
-                            Guid sessionId = Guid.Parse(cookiesListJson.sessionId);
-
-                            if (!cookieJar.ContainsKey(sessionId))
+                            var cl = (CookieCollection)((DictionaryEntry)e).Value;
+                            foreach (Cookie fc in cl)
                             {
-                                string jsonResponse = "{\"code\": 500, \"detail\": \"sessionId not found\"}";
-                                await SendResponseJson(resp, 500, jsonResponse);
-                            }
-                            else
-                            {
-                                cookieJar[sessionId] = new CookieContainer();
-                                
-                                string jsonResponse = "{\"status\": 200, \"detail\": \"success\"}";
-                                await SendResponseJson(resp, 200, jsonResponse);
+                                yield return fc;
                             }
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        resp.StatusCode = 500;
-                        Console.WriteLine($"{ex.Message}, {ex.StackTrace}");
-                    }
                 }
-                // Установить куки в сессии
-                else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/api/v1/set_cookies_list")
+
+                static async Task SendResponseJson(HttpListenerResponse resp, int code, string data)
                 {
-                    try
+                    byte[] buffer = Encoding.UTF8.GetBytes(data);
+
+                    resp.ContentType = "application/json";
+                    resp.ContentEncoding = Encoding.UTF8;
+                    resp.ContentLength64 = buffer.Length;
+                    resp.StatusCode = code;
+
+                    await resp.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                }
+
+
+                static void Main(string[] args)
+                {
+                    var httpListener = new HttpListener();
+                    httpListener.Prefixes.Add("http://localhost:2505/");
+                    httpListener.Start();
+
+                    Console.WriteLine("Cookie Server start on http://localhost:2505/");
+
+
+                    Task listenTask = HandleIncomingConnections(httpListener);
+                    listenTask.GetAwaiter().GetResult();
+
+                    httpListener.Close();
+                }
+
+
+                static async Task HandleIncomingConnections(HttpListener listener)
+                {
+                    while (true)
                     {
-                        using (StreamReader reader = new StreamReader(req.InputStream, req.ContentEncoding))
+                        // Ожидаем входящее соединение
+                        HttpListenerContext ctx = await listener.GetContextAsync();
+
+                        // Получаем запрос и ответ
+                        HttpListenerRequest req = ctx.Request;
+                        HttpListenerResponse resp = ctx.Response;
+
+                        // Очистить куки
+                        if (req.HttpMethod == "GET" && req.Url.AbsolutePath == "/api/v1/clear_all_cookies")
                         {
-                            string requestBody = await reader.ReadToEndAsync();
-                            CookiesListJson cookiesListJson = JsonConvert.DeserializeObject<CookiesListJson>(requestBody);
-
-                            Guid sessionId = Guid.Parse(cookiesListJson.sessionId);
-
-                            if (!cookieJar.ContainsKey(sessionId))
-                            {
-                                cookieJar.Add(sessionId, new CookieContainer());
-                            }
-                            var currentCookieContainer = cookieJar[sessionId];
-
-                            foreach (var cookie in cookiesListJson.cookies)
-                            {
-                                var currentCookie = new Cookie();
-                                currentCookie.Name = cookie.name;
-                                currentCookie.Value = cookie.value;
-                                currentCookie.Domain = cookie.domain;
-                                currentCookie.Secure = cookie.secure;
-                                currentCookie.Path = cookie.path;
-                                currentCookie.HttpOnly = cookie.httpOnly;
-                                currentCookie.Expires = UnixTimeStampToDateTime(cookie.expires);
-
-                                Console.WriteLine(currentCookie.Expires);
-
-                                currentCookieContainer.Add(currentCookie);
-                            }
+                            Console.WriteLine("Очистка кукисов...");
+                            cookieJar.Clear();
 
                             // Формируем JSON ответ
                             string jsonResponse = "{\"code\": 200, \"detail\": \"success\"}";
                             await SendResponseJson(resp, 200, jsonResponse);
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        resp.StatusCode = 500;
-                    }
-                }
-                // Получить все куки из сессии по URL
-                else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/api/v1/get_all_cookies_list")
-                {
-                    try
-                    {
-                        using (StreamReader reader = new StreamReader(req.InputStream, req.ContentEncoding))
+                        // Очистить куки в определенной сессии
+                        else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/api/v1/clear_cookies_by_sessionid")
                         {
-                            string requestBody = await reader.ReadToEndAsync();
-
-                            CookiesListJson cookiesListJson = JsonConvert.DeserializeObject<CookiesListJson>(requestBody);
-                            Console.WriteLine(cookiesListJson.sessionId);
-
-                            Guid sessionId = Guid.Parse(cookiesListJson.sessionId);
-
-                            if (!cookieJar.ContainsKey(sessionId))
+                            try
                             {
-                                string jsonResponse = "{\"code\": 500, \"detail\": \"sessionId not found\"}";
-                                await SendResponseJson(resp, 500, jsonResponse);
-
-                            } else
-                            {
-
-                                var currentCookieContainer = cookieJar[sessionId];
-                                var cookieList = GetAllCookies(currentCookieContainer);
-                                var jsonCookieList = new AllCookiesListJson();
-                                jsonCookieList.cookies = new List<CookieJson>();
-
-                                foreach (var cookie in cookieList)
+                                using (StreamReader reader = new StreamReader(req.InputStream, req.ContentEncoding))
                                 {
-                                    var cookieJson = new CookieJson();
-                                    cookieJson.name = cookie.Name;
-                                    cookieJson.value = cookie.Value;
-                                    cookieJson.secure = cookie.Secure;
-                                    cookieJson.path = cookie.Path;
-                                    cookieJson.domain = cookie.Domain;
-                                    cookieJson.httpOnly = cookie.HttpOnly;
-                                    cookieJson.expires = ((DateTimeOffset)cookie.Expires).ToUnixTimeSeconds();
+                                    string requestBody = await reader.ReadToEndAsync();
 
-                                    jsonCookieList.cookies.Add(cookieJson);
+                                    CookiesListByUrlJson cookiesListJson = JsonConvert.DeserializeObject<CookiesListByUrlJson>(requestBody);
+                                    Console.WriteLine(cookiesListJson.sessionId);
+
+                                    Guid sessionId = Guid.Parse(cookiesListJson.sessionId);
+
+                                    if (!cookieJar.ContainsKey(sessionId))
+                                    {
+                                        string jsonResponse = "{\"code\": 500, \"detail\": \"sessionId not found\"}";
+                                        await SendResponseJson(resp, 500, jsonResponse);
+                                    }
+                                    else
+                                    {
+                                        cookieJar[sessionId] = new CookieContainer();
+
+                                        string jsonResponse = "{\"status\": 200, \"detail\": \"success\"}";
+                                        await SendResponseJson(resp, 200, jsonResponse);
+                                    }
                                 }
-
-                                string jsonResponse = JsonConvert.SerializeObject(jsonCookieList);
-                                await SendResponseJson(resp, 200, jsonResponse);
-
+                            }
+                            catch (Exception ex)
+                            {
+                                resp.StatusCode = 500;
+                                Console.WriteLine($"{ex.Message}, {ex.StackTrace}");
                             }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        resp.StatusCode = 500;
-                        Console.WriteLine($"{ex.Message}, {ex.StackTrace}");
-                    }
-                }
-                // Получить куки из сессии по URL
-                else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/api/v1/get_cookies_list_by_url")
-                {
-                    try
-                    {
-                        using (StreamReader reader = new StreamReader(req.InputStream, req.ContentEncoding))
+                        // Установить куки в сессии
+                        else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/api/v1/set_cookies_list")
                         {
-                            string requestBody = await reader.ReadToEndAsync();
-
-                            CookiesListByUrlJson cookiesListJson = JsonConvert.DeserializeObject<CookiesListByUrlJson>(requestBody);
-                            Console.WriteLine(cookiesListJson.sessionId);
-
-                            Guid sessionId = Guid.Parse(cookiesListJson.sessionId);
-
-                            if (!cookieJar.ContainsKey(sessionId))
+                            try
                             {
-                                string jsonResponse = "{\"code\": 500, \"detail\": \"sessionId not found\"}";
-                                await SendResponseJson(resp, 500, jsonResponse);
-                            }
-                            else
-                            {
-                                Uri currentUrl;
-                                try
+                                using (StreamReader reader = new StreamReader(req.InputStream, req.ContentEncoding))
                                 {
-                                    currentUrl = new Uri(cookiesListJson.url);
-                                    var currentCookieContainer = cookieJar[sessionId];
-                                    var cookieList = currentCookieContainer.GetCookies(currentUrl);
+                                    string requestBody = await reader.ReadToEndAsync();
+                                    CookiesListJson cookiesListJson = JsonConvert.DeserializeObject<CookiesListJson>(requestBody);
 
-                                    var jsonCookieList = new AllCookiesListJson();
-                                    jsonCookieList.cookies = new List<CookieJson>();
+                                    Guid sessionId = Guid.Parse(cookiesListJson.sessionId);
 
-                                    foreach (Cookie cookie in cookieList)
+                                    if (!cookieJar.ContainsKey(sessionId))
                                     {
-                                        var cookieJson = new CookieJson();
-                                        cookieJson.name = cookie.Name;
-                                        cookieJson.value = cookie.Value;
-                                        cookieJson.secure = cookie.Secure;
-                                        cookieJson.path = cookie.Path;
-                                        cookieJson.domain = cookie.Domain;
-                                        cookieJson.httpOnly = cookie.HttpOnly;
-                                        cookieJson.expires = ((DateTimeOffset)cookie.Expires).ToUnixTimeSeconds();
+                                        cookieJar.Add(sessionId, new CookieContainer());
+                                    }
+                                    var currentCookieContainer = cookieJar[sessionId];
 
-                                        jsonCookieList.cookies.Add(cookieJson);
+                                    foreach (var cookie in cookiesListJson.cookies)
+                                    {
+                                        var currentCookie = new Cookie();
+                                        currentCookie.Name = cookie.name;
+                                        currentCookie.Value = cookie.value;
+                                        currentCookie.Domain = cookie.domain;
+                                        currentCookie.Secure = cookie.secure;
+                                        currentCookie.Path = cookie.path;
+                                        currentCookie.HttpOnly = cookie.httpOnly;
+                                        currentCookie.Expires = UnixTimeStampToDateTime(cookie.expires);
+
+                                        Console.WriteLine(currentCookie.Expires);
+
+                                        currentCookieContainer.Add(currentCookie);
                                     }
 
-                                    string jsonResponse = JsonConvert.SerializeObject(jsonCookieList);
+                                    // Формируем JSON ответ
+                                    string jsonResponse = "{\"code\": 200, \"detail\": \"success\"}";
                                     await SendResponseJson(resp, 200, jsonResponse);
                                 }
-                                catch (Exception ex)
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine(ex.ToString());
+                                await SendResponseJson(resp, 500, "{\"error\": \"" + ex.ToString() + "\"}");
+                                resp.StatusCode = 500;
+                            }
+                        }
+                        // Установить куки через header
+                        else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/api/v1/set_cookies_by_header")
+                        {
+                            try
+                            {
+                                using (StreamReader reader = new StreamReader(req.InputStream, req.ContentEncoding))
                                 {
-                                    string jsonResponse = "{\"status\": 500, \"detail\": \"url is not correct\"}";
-                                    await SendResponseJson(resp, 500, jsonResponse);
+                                    string requestBody = await reader.ReadToEndAsync();
+                                    CookiesHeaderJson cookiesListJson = JsonConvert.DeserializeObject<CookiesHeaderJson>(requestBody);
+
+                                    Guid sessionId = Guid.Parse(cookiesListJson.sessionId);
+
+                                    if (!cookieJar.ContainsKey(sessionId))
+                                    {
+                                        cookieJar.Add(sessionId, new CookieContainer());
+                                    }
+                                    var currentCookieContainer = cookieJar[sessionId];
+
+                                    Uri url = new Uri(cookiesListJson.url);
+                                    currentCookieContainer.SetCookies(url, cookiesListJson.cookies);
+
+                                    // Формируем JSON ответ
+                                    string jsonResponse = "{\"code\": 200, \"detail\": \"success\"}";
+                                    await SendResponseJson(resp, 200, jsonResponse);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine(ex.ToString());
+                                await SendResponseJson(resp, 500, "{\"error\": \"" + ex.ToString() + "\"}");
+                                resp.StatusCode = 500;
+                            }
+                        }
+                        // Получить все куки из сессии по URL
+                        else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/api/v1/get_all_cookies_list")
+                        {
+                            try
+                            {
+                                using (StreamReader reader = new StreamReader(req.InputStream, req.ContentEncoding))
+                                {
+                                    string requestBody = await reader.ReadToEndAsync();
+
+                                    CookiesListJson cookiesListJson = JsonConvert.DeserializeObject<CookiesListJson>(requestBody);
+                                    Console.WriteLine(cookiesListJson.sessionId);
+
+                                    Guid sessionId = Guid.Parse(cookiesListJson.sessionId);
+
+                                    if (!cookieJar.ContainsKey(sessionId))
+                                    {
+                                        string jsonResponse = "{\"code\": 500, \"detail\": \"sessionId not found\"}";
+                                        await SendResponseJson(resp, 500, jsonResponse);
+
+                                    }
+                                    else
+                                    {
+
+                                        var currentCookieContainer = cookieJar[sessionId];
+                                        var cookieList = GetAllCookies(currentCookieContainer);
+                                        var jsonCookieList = new AllCookiesListJson();
+                                        jsonCookieList.cookies = new List<CookieJson>();
+
+                                        foreach (var cookie in cookieList)
+                                        {
+                                            var cookieJson = new CookieJson();
+                                            cookieJson.name = cookie.Name;
+                                            cookieJson.value = cookie.Value;
+                                            cookieJson.secure = cookie.Secure;
+                                            cookieJson.path = cookie.Path;
+                                            cookieJson.domain = cookie.Domain;
+                                            cookieJson.httpOnly = cookie.HttpOnly;
+                                            cookieJson.expires = ((DateTimeOffset)cookie.Expires).ToUnixTimeSeconds();
+
+                                            jsonCookieList.cookies.Add(cookieJson);
+                                        }
+
+                                        string jsonResponse = JsonConvert.SerializeObject(jsonCookieList);
+                                        await SendResponseJson(resp, 200, jsonResponse);
+
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                resp.StatusCode = 500;
+                                Console.WriteLine($"{ex.Message}, {ex.StackTrace}");
+                            }
+                        }
+                        // Получить куки из сессии по URL
+                        else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/api/v1/get_cookies_list_by_url")
+                        {
+                            try
+                            {
+                                using (StreamReader reader = new StreamReader(req.InputStream, req.ContentEncoding))
+                                {
+                                    string requestBody = await reader.ReadToEndAsync();
+
+                                    CookiesListByUrlJson cookiesListJson = JsonConvert.DeserializeObject<CookiesListByUrlJson>(requestBody);
+                                    Console.WriteLine(cookiesListJson.sessionId);
+
+                                    Guid sessionId = Guid.Parse(cookiesListJson.sessionId);
+
+                                    if (!cookieJar.ContainsKey(sessionId))
+                                    {
+                                        string jsonResponse = "{\"code\": 500, \"detail\": \"sessionId not found\"}";
+                                        await SendResponseJson(resp, 500, jsonResponse);
+                                    }
+                                    else
+                                    {
+                                        Uri currentUrl;
+                                        try
+                                        {
+                                            currentUrl = new Uri(cookiesListJson.url);
+                                            var currentCookieContainer = cookieJar[sessionId];
+                                            var cookieList = currentCookieContainer.GetCookieHeader(currentUrl);
+
+                                            var jsonCookieHeader = new CookieHeaderJson();
+                                            jsonCookieHeader.cookie = cookieList;
+
+                                            string jsonResponse = JsonConvert.SerializeObject(jsonCookieHeader);
+                                            await SendResponseJson(resp, 200, jsonResponse);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            string jsonResponse = "{\"status\": 500, \"detail\": \"url is not correct\"}";
+                                            await SendResponseJson(resp, 500, jsonResponse);
+                                        }
+
+                                    }
                                 }
 
                             }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"{ex.Message}, {ex.StackTrace}");
+
+                                string jsonResponse = "{\"status\": 500, \"detail\": \"" + ex.Message + "\"}";
+                                await SendResponseJson(resp, 500, jsonResponse);
+                            }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"{ex.Message}, {ex.StackTrace}");
+                        else
+                        {
+                            //resp.StatusCode = 404;
+                            string jsonResponse = "{\"status\": 404, \"detail\": \"not found\"}";
+                            await SendResponseJson(resp, 404, jsonResponse);
+                        }
 
-                        string jsonResponse = "{\"status\": 500, \"detail\": \"" + ex.Message + "\"}";
-                        await SendResponseJson(resp, 500, jsonResponse);
+                        // Закрываем поток
+                        resp.Close();
                     }
                 }
-                else
-                {
-                    //resp.StatusCode = 404;
-                    string jsonResponse = "{\"status\": 404, \"detail\": \"not found\"}";
-                    await SendResponseJson(resp, 404, jsonResponse);
-                }
-
-                // Закрываем поток
-                resp.Close();
             }
         }
-
     }
 }
